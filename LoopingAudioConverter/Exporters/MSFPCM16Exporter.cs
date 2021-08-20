@@ -20,5 +20,12 @@ namespace LoopingAudioConverter {
 			File.WriteAllBytes(outPath, msf.Export());
 			return Task.CompletedTask;
 		}
+
+		public void WriteFile(PCM16Audio lwav, string output_dir, string original_filename_no_ext) {
+			var msf = MSF.FromAudioSource(lwav, big_endian: big_endian);
+			string outPath = Path.Combine(output_dir, original_filename_no_ext + ".msf");
+			File.WriteAllBytes(outPath, msf.Export());
+		}
+
 	}
 }

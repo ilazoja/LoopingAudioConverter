@@ -45,5 +45,35 @@ namespace LoopingAudioConverter {
 				throw new AudioImporterException("Could not read faad output: " + e.Message);
 			}
 		}
+
+		public PCM16Audio ReadFile(string filename) {
+			if (!File.Exists(ExePath)) {
+				throw new AudioImporterException("faad not found at path: " + ExePath);
+			}
+			if (filename.Contains('"')) {
+				throw new AudioImporterException("File paths with double quote marks (\") are not supported");
+			}
+
+			string outfile = TempFiles.Create("wav");
+
+			ProcessStartInfo psi = new ProcessStartInfo {
+				FileName = ExePath,
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				Arguments = "-o " + outfile + " \"" + filename + "\""
+			};
+			using (var process = new Process()) {
+				process.StartInfo = psi;
+				process.Start();
+				process.WaitForExit();
+			}
+
+
+			try {
+				return PCM16Factory.FromFile(outfile, true);
+			} catch (PCM16FactoryException e) {
+				throw new AudioImporterException("Could not read faad output: " + e.Message);
+			}
+		}
 	}
 }

@@ -120,5 +120,88 @@ namespace LoopingAudioConverter {
 				throw new AudioImporterException("Could not read output of VGMPlay: " + e.Message);
 			}
 		}
+		public PCM16Audio ReadFile(string filename) {
+			if (!File.Exists(ExePath)) {
+				throw new AudioImporterException("VGMPlay not found at path: " + ExePath);
+			}
+			if (filename.Contains('"')) {
+				throw new AudioImporterException("File paths with double quote marks (\") are not supported");
+			}
+
+			try {
+				string tmpDir = Path.Combine(Path.GetTempPath(), "LoopingaudioConverter-" + Guid.NewGuid());
+				Directory.CreateDirectory(tmpDir);
+
+				string inFile = Path.Combine(tmpDir, "audio" + Path.GetExtension(filename));
+				File.Copy(filename, inFile);
+				using (var sw = new StreamWriter(new FileStream(Path.Combine(tmpDir, "VGMPlay.ini"), FileMode.Create, FileAccess.Write))) {
+					sw.WriteLine("[General]");
+					if (SampleRate != null) {
+						sw.WriteLine("SampleRate = " + SampleRate);
+					}
+					sw.WriteLine("FadeTime = 500");
+					sw.WriteLine("LogSound = 1");
+					sw.WriteLine("MaxLoops = 0x01");
+				}
+
+				ProcessStartInfo psi = new ProcessStartInfo {
+					FileName = Path.GetFullPath(ExePath),
+					WorkingDirectory = tmpDir,
+					UseShellExecute = false,
+					CreateNoWindow = true,
+					Arguments = inFile
+				};
+				using (var process = new Process()) {
+					process.StartInfo = psi;
+					process.Start();
+					process.WaitForExit();
+				}
+				var data = PCM16Factory.FromFile(Path.Combine(tmpDir, "audio.wav"), true);
+				Directory.Delete(tmpDir, true);
+
+				// Check format
+				bool compressed;
+				using (var fs = new FileStream(filename, FileMode.Open, FileAccess.Read))
+				using (var br = new BinaryReader(fs)) {
+					int tag = br.ReadUInt16();
+					if (tag == 0x1F8B) throw new Exception("Machine is big-endian");
+					compressed = tag == 0x8B1F;
+				}
+
+				// Read loop points from file
+				using (var fs = new FileStream(filename, FileMode.Open, FileAccess.Read))
+				using (var gz = compressed ? new GZipStream(fs, CompressionMode.Decompress) : fs as Stream)
+				using (var br = new BinaryReader(gz)) {
+					int tag = br.ReadInt32();
+					if (tag == 0x56676D20) throw new Exception("Machine is big-endian");
+					if (tag != 0x206D6756) throw new Exception($"File not in Vgm format ({tag.ToString("X8")})");
+
+					for (int i = 0; i < 5; i++) br.ReadInt32();
+
+					int samples = br.ReadInt32();
+					br.ReadInt32();
+					int loopSamples = br.ReadInt32();
+
+					double sampleRateRatio = data.SampleRate / 44100.0;
+					samples = (int)(samples * sampleRateRatio);
+					loopSamples = (int)(loopSamples * sampleRateRatio);
+
+					if (loopSamples == 0) {
+						data.NonLooping = true;
+					} else {
+						data.Looping = true;
+						data.LoopStart = samples - loopSamples;
+						data.LoopEnd = samples;
+					}
+				}
+
+				return data;
+			} catch (Exception e) {
+				Console.Error.WriteLine(e.GetType());
+				Console.Error.WriteLine(e.Message);
+				Console.Error.WriteLine(e.StackTrace);
+				throw new AudioImporterException("Could not read output of VGMPlay: " + e.Message);
+			}
+		}
 	}
 }

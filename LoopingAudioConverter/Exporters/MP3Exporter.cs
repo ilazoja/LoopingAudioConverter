@@ -1,4 +1,5 @@
 ﻿using RunProcessAsTask;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
@@ -34,6 +35,37 @@ namespace LoopingAudioConverter {
 				Arguments = "--silent " + EncodingParameters + " " + infile + " \"" + outPath + "\""
 			};
 			var pr = await ProcessEx.RunAsync(psi);
+			File.Delete(infile);
+
+			if (pr.ExitCode != 0) {
+				throw new AudioExporterException("LAME quit with exit code " + pr.ExitCode);
+			}
+		}
+
+		public void WriteFile(PCM16Audio lwav, string output_dir, string original_filename_no_ext) {
+			string outPath = Path.Combine(output_dir, original_filename_no_ext + ".mp3");
+			if (outPath.Contains("\"")) {
+				throw new AudioExporterException("Invalid character (\") found in output filename");
+			}
+
+			if (lwav.OriginalMP3 != null) {
+				File.WriteAllBytes(outPath, lwav.OriginalMP3);
+				return;
+			}
+
+			string infile = TempFiles.Create("wav");
+			File.WriteAllBytes(infile, lwav.Export());
+
+			ProcessStartInfo psi = new ProcessStartInfo {
+				FileName = ExePath,
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				Arguments = "--silent " + EncodingParameters + " " + infile + " \"" + outPath + "\""
+			};
+			var pr = new Process();
+			pr.StartInfo = psi;
+			pr.Start();
+			pr.WaitForExit();
 			File.Delete(infile);
 
 			if (pr.ExitCode != 0) {

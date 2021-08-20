@@ -93,5 +93,22 @@ namespace LoopingAudioConverter {
 				throw new AudioImporterException("Could not convert from B" + (char)data[0] + "STM: " + e.Message);
 			}
 		}
+
+		public PCM16Audio ReadFile(string filename) {
+			if (filename.Contains('"')) {
+				throw new AudioImporterException("File paths with double quote marks (\") are not supported");
+			}
+
+			byte[] data = File.ReadAllBytes(filename);
+			if (data.Length == 0) {
+				throw new AudioImporterException("Empty input file");
+			}
+
+			try {
+				return PCM16Factory.FromAudioData(Read(data, filename));
+			} catch (Exception e) {
+				throw new AudioImporterException("Could not convert from B" + (char)data[0] + "STM: " + e.Message);
+			}
+		}
 	}
 }

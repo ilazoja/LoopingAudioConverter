@@ -55,18 +55,21 @@ namespace LoopingAudioConverter {
 			f.AddInputFiles(initialInputFiles);
 			
 			if (auto) {
-				RunAsync(f.GetOptions(), showEndDialog: false).GetAwaiter().GetResult();
+				RunAsync(f.GetOptions(), showEndDialog: false, commandLine: true).GetAwaiter().GetResult();
 			} else {
 				Application.Run(f);
 				Task.WaitAll(f.RunningTasks.ToArray());
 			}
 		}
 
+
+
 		/// <summary>
 		/// Runs a batch conversion process.
+		/// Have command line option which reads and writes files synchronously (hangs otherwise from command line) 
 		/// </summary>
 		/// <param name="o">Options for the batch.</param>
-		public static async Task RunAsync(Options o, bool showEndDialog = true, IWin32Window owner = null) {
+		public static async Task RunAsync(Options o, bool showEndDialog = true, bool commandLine = false, IWin32Window owner = null) {
 			if (o.ExporterType == ExporterType.MP3 && (o.ExportPreLoop || o.ExportLoop)) {
 				MessageBox.Show(owner, "MP3 encoding adds gaps at the start and end of each file, so the before-loop portion and the loop portion will not line up well.",
 					"Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -228,7 +231,9 @@ namespace LoopingAudioConverter {
 						if (importer is IRenderingAudioImporter) {
 							((IRenderingAudioImporter)importer).SampleRate = o.SampleRate;
 						}
-						w = await importer.ReadFileAsync(inputFile);
+						if (commandLine) w = importer.ReadFile(inputFile);
+						else w = await importer.ReadFileAsync(inputFile);
+
 						w.OriginalPath = inputFile;
 						break;
 					} catch (AudioImporterException e) {
@@ -331,20 +336,40 @@ namespace LoopingAudioConverter {
 						toExport.Audio.Looping = false;
 					}
 
-					async Task Encode() {
-						var row = window.AddEncodingRow(toExport.Name);
-						try {
-							await exporter.WriteFileAsync(toExport.Audio, outputDir, toExport.Name);
-							exported.Enqueue(toExport.Name);
-						} finally {
-							for (int j = 0; j < claims; j++) {
-								sem.Release();
+					if (commandLine) {
+						void Encode() {
+							var row = window.AddEncodingRow(toExport.Name);
+							try {
+								exporter.WriteFile(toExport.Audio, outputDir, toExport.Name);
+								exported.Enqueue(toExport.Name);
+							} finally {
+								for (int j = 0; j < claims; j++) {
+									sem.Release();
+								}
+								row.Remove();
 							}
-							row.Remove();
 						}
-					}
 
-					tasks.Add(Encode());
+						Encode();
+
+					}
+					else {
+						async Task Encode() {
+							var row = window.AddEncodingRow(toExport.Name);
+							try {
+								await exporter.WriteFileAsync(toExport.Audio, outputDir, toExport.Name);
+								exported.Enqueue(toExport.Name);
+							} finally {
+								for (int j = 0; j < claims; j++) {
+									sem.Release();
+								}
+								row.Remove();
+							}
+						}
+
+						tasks.Add(Encode());
+					}
+					
 				}
 			}
 			foreach (var t in tasks) {

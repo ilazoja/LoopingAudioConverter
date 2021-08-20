@@ -28,5 +28,13 @@ namespace LoopingAudioConverter {
 				throw new AudioImporterException(e.Message, e);
 			}
 		}
+
+		public PCM16Audio ReadFile(string filename) {
+			try {
+				return PCM16Factory.FromByteArray(File.ReadAllBytes(filename));
+			} catch (PCM16FactoryException e) {
+				throw new AudioImporterException(e.Message, e);
+			}
+		}
 	}
 }

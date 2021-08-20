@@ -37,5 +37,20 @@ namespace LoopingAudioConverter {
 				};
 			}
 		}
+
+		public PCM16Audio ReadFile(string filename) {
+			byte[] mp3data = File.ReadAllBytes(filename);
+			using (var output = new MemoryStream())
+			using (var input = new MemoryStream(mp3data, false))
+			using (var mp3 = new MP3Stream(input)) {
+				mp3.CopyTo(output);
+
+				byte[] array = output.ToArray();
+				short[] samples = ToUInt16Array(array);
+				return new PCM16Audio(mp3.ChannelCount, mp3.Frequency, samples) {
+					OriginalMP3 = mp3data
+				};
+			}
+		}
 	}
 }

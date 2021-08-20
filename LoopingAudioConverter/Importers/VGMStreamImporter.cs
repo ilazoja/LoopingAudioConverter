@@ -63,5 +63,35 @@ namespace LoopingAudioConverter {
 				throw new AudioImporterException("Could not read output of test.exe: " + e.Message);
 			}
 		}
+
+		public PCM16Audio ReadFile(string filename) {
+			if (!File.Exists(TestExePath)) {
+				throw new AudioImporterException("test.exe not found at path: " + TestExePath);
+			}
+			if (filename.Contains('"')) {
+				throw new AudioImporterException("File paths with double quote marks (\") are not supported");
+			}
+
+			if (!Directory.Exists("tmp")) {
+				Directory.CreateDirectory("tmp");
+			}
+
+			ProcessStartInfo psi = new ProcessStartInfo {
+				WorkingDirectory = "tmp",
+				FileName = TestExePath,
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				Arguments = "-L -l 1 -f 0 -o dump.wav \"" + filename + "\""
+			};
+			Process p = Process.Start(psi);
+			p.WaitForExit();
+
+			try {
+				PCM16Audio lwav = PCM16Factory.FromFile("tmp/dump.wav", true);
+				return lwav;
+			} catch (Exception e) {
+				throw new AudioImporterException("Could not read output of test.exe: " + e.Message);
+			}
+		}
 	}
 }

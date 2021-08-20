@@ -63,6 +63,36 @@ namespace LoopingAudioConverter {
 			}
 		}
 
+		public PCM16Audio ReadFile(string filename) {
+			if (!File.Exists(ExePath)) {
+				throw new AudioImporterException("test.exe not found at path: " + ExePath);
+			}
+			if (filename.Contains('"')) {
+				throw new AudioImporterException("File paths with double quote marks (\") are not supported");
+			}
+
+			string outfile = TempFiles.Create("wav");
+
+			ProcessStartInfo psi = new ProcessStartInfo {
+				FileName = ExePath,
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				Arguments = "\"" + filename + "\" -b 16 -t wav " + outfile
+			};
+			using (var process = new Process()) {
+				process.StartInfo = psi;
+				process.Start();
+				process.WaitForExit();
+			}
+
+			try {
+				PCM16Audio lwav = PCM16Factory.FromFile(outfile, true);
+				return lwav;
+			} catch (Exception e) {
+				throw new AudioImporterException("Could not read SoX output: " + e.Message);
+			}
+		}
+
 		/// <summary>
 		/// Applies one or more SoX effects to the PCM16Audio given and reads the result into a new PCM16Audio.
 		/// Intended to either adjust the volume of the audio or reduce the file size.
@@ -163,6 +193,32 @@ namespace LoopingAudioConverter {
 				CreateNoWindow = true
 			};
 			var pr = await ProcessEx.RunAsync(psi);
+			File.Delete(infile);
+
+			if (pr.ExitCode != 0) {
+				throw new AudioExporterException("SoX quit with exit code " + pr.ExitCode);
+			}
+		}
+
+		public void WriteFile(PCM16Audio lwav, string output_filename, string encodingParameters = null) {
+			if (output_filename.Contains('"')) {
+				throw new AudioImporterException("File paths with double quote marks (\") are not supported");
+			}
+
+			string infile = TempFiles.Create("wav");
+			File.WriteAllBytes(infile, lwav.Export());
+
+			ProcessStartInfo psi = new ProcessStartInfo {
+				FileName = ExePath,
+				Arguments = infile + " " + (encodingParameters ?? "") + " \"" + output_filename + "\"",
+				UseShellExecute = false,
+				CreateNoWindow = true
+			};
+			var pr = new Process();
+			pr.StartInfo = psi;
+			pr.Start();
+			pr.WaitForExit();
+
 			File.Delete(infile);
 
 			if (pr.ExitCode != 0) {

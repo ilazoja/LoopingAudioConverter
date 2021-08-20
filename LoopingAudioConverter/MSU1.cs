@@ -42,6 +42,10 @@ namespace LoopingAudioConverter {
 			}
 		}
 
+		public PCM16Audio ReadFile(string filename) {
+			throw new NotImplementedException();
+		}
+
 		public bool SupportsExtension(string extension) {
 			if (extension.StartsWith(".")) extension = extension.Substring(1);
 			return extension.Equals("pcm", StringComparison.InvariantCultureIgnoreCase);
@@ -70,6 +74,30 @@ namespace LoopingAudioConverter {
 				}
 			}
 			return Task.FromResult(0);
+		}
+
+		public void WriteFile(PCM16Audio lwav, string output_dir, string original_filename_no_ext) {
+			if (lwav.Channels != 2 || lwav.SampleRate != 44100) {
+				throw new AudioExporterException("MSU-1 output must be 2-channel audio at a sample rate of 44100Hz.");
+			}
+
+			string output_filename = Path.Combine(output_dir, original_filename_no_ext + ".pcm");
+			using (var fs = new FileStream(output_filename, FileMode.Create, FileAccess.Write))
+			using (var bw = new BinaryWriter(fs)) {
+				foreach (char c in "MSU1") {
+					bw.Write((byte)c);
+				}
+
+				if (lwav.Looping) {
+					bw.Write((int)lwav.LoopStart);
+				} else {
+					bw.Write((int)0);
+				}
+
+				foreach (short sample in lwav.Samples) {
+					bw.Write(sample);
+				}
+			}
 		}
 	}
 }

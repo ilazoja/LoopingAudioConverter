@@ -39,5 +39,35 @@ namespace LoopingAudioConverter {
 				throw new AudioExporterException("qaac quit with exit code " + pr.ExitCode);
 			}
 		}
+
+		public void WriteFile(PCM16Audio lwav, string output_dir, string original_filename_no_ext) {
+			string outPath = Path.Combine(output_dir, original_filename_no_ext + (Adts ? ".aac" : ".m4a"));
+			if (outPath.Contains("\"")) {
+				throw new AudioExporterException("Invalid character (\") found in output filename");
+			}
+
+			string infile = TempFiles.Create("wav");
+			File.WriteAllBytes(infile, lwav.Export());
+
+			ProcessStartInfo psi = new ProcessStartInfo {
+				FileName = ExePath,
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				Arguments = $"--silent {(Adts ? "--adts " : "")} {EncodingParameters} {infile} -o \"{outPath}\""
+			};
+			var pr = new Process();
+			pr.StartInfo = psi;
+			pr.Start();
+			pr.WaitForExit();
+			
+			File.Delete(infile);
+
+			if (pr.ExitCode != 0) {
+				Console.WriteLine(pr.StandardError.ReadLine());
+				throw new AudioExporterException("qaac quit with exit code " + pr.ExitCode);
+			}
+		}
 	}
+
+	
 }
